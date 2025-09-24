@@ -1,15 +1,18 @@
-"use client";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import ProtectedRoute from "@/components/protected-route";
+import { getPolls } from "@/lib/actions";
 
-export default function PollsListPage() {
-  // Placeholder list
-  const polls = [
-    { id: "1", question: "What's your favorite programming language?" },
-    { id: "2", question: "Tabs or spaces?" },
-  ];
+export default async function PollsListPage() {
+  let polls: any[] = [];
+  let error: string | null = null;
+
+  try {
+    polls = await getPolls();
+  } catch (err) {
+    error = (err as Error).message;
+  }
 
   return (
     <ProtectedRoute>
@@ -31,27 +34,47 @@ export default function PollsListPage() {
             </Button>
           </div>
 
+          {error && (
+            <Card className="mb-6 border-destructive">
+              <CardContent className="p-4">
+                <p className="text-destructive">Error loading polls: {error}</p>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid gap-4">
-            {polls.map((p) => (
+            {polls.map((poll) => (
               <Card
-                key={p.id}
+                key={poll.id}
                 className="hover:shadow-md transition-shadow cursor-pointer"
               >
                 <CardContent className="p-6">
-                  <Link href={`/polls/${p.id}`} className="block">
-                    <h3 className="text-lg font-medium text-card-foreground hover:text-primary transition-colors">
-                      {p.question}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Click to view and vote
-                    </p>
+                  <Link href={`/polls/${poll.id}`} className="block">
+                    <CardHeader className="p-0 mb-2">
+                      <CardTitle className="text-lg font-medium text-card-foreground hover:text-primary transition-colors">
+                        {poll.question}
+                      </CardTitle>
+                      {poll.description && (
+                        <CardDescription className="text-sm text-muted-foreground mt-1">
+                          {poll.description}
+                        </CardDescription>
+                      )}
+                    </CardHeader>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>
+                        {new Date(poll.created_at).toLocaleDateString()}
+                      </span>
+                      <span>
+                        {poll.options?.length || 0} options
+                      </span>
+                    </div>
                   </Link>
                 </CardContent>
               </Card>
             ))}
           </div>
 
-          {polls.length === 0 && (
+          {polls.length === 0 && !error && (
             <Card className="text-center py-12">
               <CardContent>
                 <h3 className="text-lg font-medium text-muted-foreground mb-2">

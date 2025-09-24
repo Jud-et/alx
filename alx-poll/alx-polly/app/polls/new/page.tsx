@@ -6,16 +6,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FormField, FormLabel, FormMessage } from "@/components/ui/form";
 import ProtectedRoute from "@/components/protected-route";
-import { useAuth } from "@/lib/auth-context";
-import { useRouter } from "next/navigation";
+import { createPoll, CreatePollData } from "@/lib/actions";
 
 export default function NewPollPage() {
   const [question, setQuestion] = useState("");
+  const [description, setDescription] = useState("");
   const [options, setOptions] = useState<string[]>(["", ""]);
+  const [expiresAt, setExpiresAt] = useState("");
+  const [allowMultipleVotes, setAllowMultipleVotes] = useState(false);
+  const [showResultsBeforeVoting, setShowResultsBeforeVoting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { supabase, session } = useAuth();
-  const router = useRouter();
 
   function updateOption(index: number, value: string) {
     setOptions((prev) => prev.map((o, i) => (i === index ? value : o)));
@@ -29,52 +30,18 @@ export default function NewPollPage() {
     e.preventDefault();
     setError(null);
 
-    const trimmedQuestion = question.trim();
-    const trimmedOptions = options.map((o) => o.trim()).filter((o) => o.length > 0);
-
-    if (trimmedQuestion.length === 0) {
-      setError("Question is required");
-      return;
-    }
-    if (trimmedOptions.length < 2) {
-      setError("Provide at least two options");
-      return;
-    }
-    const unique = Array.from(new Set(trimmedOptions.map((o) => o.toLowerCase())));
-    if (unique.length !== trimmedOptions.length) {
-      setError("Options must be unique");
-      return;
-    }
-    if (!session?.user) {
-      setError("You must be logged in");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
-      // Assumes a Supabase table `polls` with columns: id (uuid, default gen),
-      // question (text), options (json or text[]), created_by (uuid)
-      const { data, error } = await supabase
-        .from("polls")
-        .insert({
-          question: trimmedQuestion,
-          options: trimmedOptions,
-          created_by: session.user.id,
-        })
-        .select("id")
-        .single();
+      const pollData: CreatePollData = {
+        question: question.trim(),
+        description: description.trim() || undefined,
+        options: options.map(o => o.trim()).filter(o => o.length > 0),
+        expiresAt: expiresAt || undefined,
+        allowMultipleVotes,
+        showResultsBeforeVoting,
+      };
 
-      if (error) {
-        setError(error.message);
-        return;
-      }
-
-      if (data?.id) {
-        // If detail page expects existing data from DB, navigate there; otherwise go back to list
-        router.push(`/polls/${data.id}`);
-      } else {
-        router.push("/polls");
-      }
+      await createPoll(pollData);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -99,7 +66,7 @@ export default function NewPollPage() {
           <CardContent>
             <form onSubmit={onSubmit} className="space-y-6">
               <FormField>
-                <FormLabel htmlFor="question">Poll Question</FormLabel>
+                <FormLabel htmlFor="question">Poll Question *</FormLabel>
                 <Textarea 
                   id="question" 
                   placeholder="What would you like to ask?"
@@ -109,9 +76,20 @@ export default function NewPollPage() {
                   className="min-h-[100px]"
                 />
               </FormField>
+
+              <FormField>
+                <FormLabel htmlFor="description">Description (Optional)</FormLabel>
+                <Textarea 
+                  id="description" 
+                  placeholder="Add more context about your poll..."
+                  value={description} 
+                  onChange={(e) => setDescription(e.target.value)} 
+                  className="min-h-[80px]"
+                />
+              </FormField>
               
               <div className="space-y-3">
-                <FormLabel>Poll Options</FormLabel>
+                <FormLabel>Poll Options *</FormLabel>
                 {options.map((opt, i) => (
                   <div key={i} className="flex gap-2">
                     <Input 
@@ -140,8 +118,49 @@ export default function NewPollPage() {
                 >
                   + Add Option
                 </Button>
-                <FormMessage>{error}</FormMessage>
               </div>
+
+              <div className="space-y-4 pt-4 border-t">
+                <FormField>
+                  <FormLabel htmlFor="expiresAt">Expiration Date (Optional)</FormLabel>
+                  <Input 
+                    id="expiresAt"
+                    type="datetime-local"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                  />
+                </FormField>
+
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      id="allowMultipleVotes"
+                      type="checkbox"
+                      checked={allowMultipleVotes}
+                      onChange={(e) => setAllowMultipleVotes(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    <FormLabel htmlFor="allowMultipleVotes" className="text-sm font-normal">
+                      Allow multiple votes per user
+                    </FormLabel>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      id="showResultsBeforeVoting"
+                      type="checkbox"
+                      checked={showResultsBeforeVoting}
+                      onChange={(e) => setShowResultsBeforeVoting(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    <FormLabel htmlFor="showResultsBeforeVoting" className="text-sm font-normal">
+                      Show results before voting
+                    </FormLabel>
+                  </div>
+                </div>
+              </div>
+
+              <FormMessage>{error}</FormMessage>
               
               <div className="flex gap-3 pt-4">
                 <Button type="submit" size="lg" className="flex-1" disabled={isSubmitting}>
